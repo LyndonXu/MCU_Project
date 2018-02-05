@@ -1,0 +1,12 @@
+
+*.dbgconf
+*.lst
+*.map
+*.crf
+*.d
+*.o
+*.axf
+*.htm
+*.sct
+*.dep
+RTE_Components.h
