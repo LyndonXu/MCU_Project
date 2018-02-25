@@ -34,12 +34,6 @@ typedef enum _tagEmKeyType
 typedef union _tagUnKeyMixIn
 {
 	StKeyState stKeyState[KEY_MIX_MAX];		/* 扫描的按键的状态 */
-
-	u32 u32PushRodValue;					/* 推杆的值 */
-
-	StRockState stRockState;				/* 摇杆的状态 */
-
-	u32 u32VolumeValue;						/* 音量的值 */
 	StCodeSwitchState stCodeSwitchState;	
 }UnKeyMixIn;
 

@@ -56,14 +56,19 @@ int main()
 	PWMCtrlInit();
 #endif
 
-	/* WM8776 & other */
-	WM8776Init();
-	AudioModeCtrlInit();
-	AudioVolumeInit();
-	
-	
 	SysTickInit();
 	ChangeEncodeState();
+	
+	/* WM8776 & other */
+	WM8776Init();
+	{
+		u32RedressTime = g_u32SysTickCnt;
+		while(SysTimeDiff(u32RedressTime, g_u32SysTickCnt) < 2000);/* 延时2S */		
+	}
+	AudioModeCtrlInit();
+	AudioVolumeInit();
+	AudioSrcInit();
+
 	
 	do
 	{
@@ -71,23 +76,17 @@ int main()
 		
 		GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
 		GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-
-//		GPIO_InitStructure.GPIO_Pin = GPIO_Pin_3;
-//		GPIO_Init(GPIOB, &GPIO_InitStructure);
-		GPIO_InitStructure.GPIO_Pin = GPIO_Pin_8;
-		GPIO_Init(GPIOB, &GPIO_InitStructure);
-		GPIO_InitStructure.GPIO_Pin = GPIO_Pin_9;
-		GPIO_Init(GPIOB, &GPIO_InitStructure);
 		
-//		GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2;
-//		GPIO_Init(GPIOD, &GPIO_InitStructure);
-		GPIO_InitStructure.GPIO_Pin = GPIO_Pin_15;
+		GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0;
+		GPIO_Init(GPIOA, &GPIO_InitStructure);
+		
+		GPIO_InitStructure.GPIO_Pin = GPIO_Pin_1;
 		GPIO_Init(GPIOA, &GPIO_InitStructure);
 	
 	}while(0);
 
 
-#if 1
+#if 0
 	/* 打开所有LED */
 
 	ChangeAllLedState(true);
@@ -164,11 +163,10 @@ int main()
 		{
 			static bool boToggle = false;
 			u32RedressTime = g_u32SysTickCnt;
-			//GPIO_WriteBit(GPIOB, GPIO_Pin_3, boToggle ? Bit_RESET : Bit_SET);
-			GPIO_WriteBit(GPIOB, GPIO_Pin_8, boToggle ? Bit_RESET : Bit_SET);
-			GPIO_WriteBit(GPIOB, GPIO_Pin_9, boToggle ? Bit_RESET : Bit_SET);
-			//GPIO_WriteBit(GPIOD, GPIO_Pin_2, boToggle ? Bit_RESET : Bit_SET);
-			GPIO_WriteBit(GPIOA, GPIO_Pin_15, boToggle ? Bit_RESET : Bit_SET);
+
+			GPIO_WriteBit(GPIOA, GPIO_Pin_0, boToggle ? Bit_RESET : Bit_SET);
+
+			GPIO_WriteBit(GPIOA, GPIO_Pin_1, boToggle ? Bit_RESET : Bit_SET);
 			boToggle = !boToggle;
 
 		}

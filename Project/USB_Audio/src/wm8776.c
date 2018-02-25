@@ -14,6 +14,39 @@
 #include "protocol.h"
 #include "flash_ctrl.h"
 
+#define EXTERN_VOLUME_CTRL_VOLUME			0x10
+#define EXTERN_VOLUME_CTRL_MUTE				0x20
+#define EXTERN_VOLUME_CTRL_CHANNEL1			0x01
+#define EXTERN_VOLUME_CTRL_CHANNEL2			0x02
+#define EXTERN_VOLUME_CTRL_CHANNEL_ALL		0x03
+
+typedef struct _tagStExternVolumeCmd
+{
+	uint8_t u8Cmd;
+	uint8_t u8Data;
+}StExternVolumeCmd;
+
+uint8_t const c_u8ExternVolumeChanelToDevice[TOTAL_EXTERN_VOLUME_CHANNEL] =
+{
+	/* _Channel_AIN_1 ~ 5, _Channel_InnerSpeaker, _Channel_NormalOut */
+	5, 4, 3, 2, 0, 1, 6
+};
+
+uint8_t const c_u8ExternVolumeChanelToGlobleChannel[TOTAL_EXTERN_VOLUME_CHANNEL] =
+{
+	/* _Channel_AIN_1 ~ 5, _Channel_InnerSpeaker, _Channel_NormalOut */
+	_Channel_AIN_1,
+	_Channel_AIN_2,
+	_Channel_AIN_3,
+	_Channel_AIN_4,
+	_Channel_AIN_5,
+	_Channel_InnerSpeaker,
+	_Channel_NormalOut,
+};
+
+
+static StExternVolumeCmd s_stExternVolumeCmd[TOTAL_EXTERN_VOLUME_CHANNEL] = { 0 };
+
 static uint16_t s_u16WMReg[_WM_Reg_Reserved] = 
 {
 	0x00F9, 0x00F9, 0x00F9,			/* Header Phone, enable zero cross */
@@ -31,6 +64,60 @@ static uint16_t s_u16WMReg[_WM_Reg_Reserved] =
 	0x0000,							/* reset */
 	
 };
+
+
+static EmAudioCtrlMode s_emAudioCtrlMode[TOTAL_MODE_CTRL] = 
+{
+	_Audio_Ctrl_Mode_Normal, 	/* AIN 1 */
+	_Audio_Ctrl_Mode_Normal, 	/* AIN 2 */
+	_Audio_Ctrl_Mode_Normal,	/* AIN 3 */
+	_Audio_Ctrl_Mode_Normal,	/* AIN 4 */	
+	_Audio_Ctrl_Mode_Normal,	/* AIN 5 */ 
+	_Audio_Ctrl_Mode_Normal,	/* Ain Mux */
+	_Audio_Ctrl_Mode_Normal,	/* Digital PC */
+	_Audio_Ctrl_Mode_Normal,	/* Header Phone */
+	_Audio_Ctrl_Mode_Normal,	/* Inner Speaker */
+	_Audio_Ctrl_Mode_Normal,	/* Normal Out */
+
+};
+
+
+
+static StVolume s_stVolume[TOTAL_VOLUME_CHANNEL] = 
+{
+	{0x80, 0x80},			/* AIN 1 */
+	{0x80, 0x80},     		/* AIN 2 */
+	{0x80, 0x80},     		/* AIN 3 */
+	{0x80, 0x80},     		/* AIN 4 */
+	{0x80, 0x80},     		/* AIN 5 */
+	/* reg:[0,255], use [0, 207], real:[0,255], 80% is 204(0xCC), Ain Mux */
+	{0xCC, 0xCC},					
+	/* reg:[0,255], use [0, 255], real:[0,255], 90% is 230(0xE6), Digital PC */
+	{0xE6, 0xE6}, 					
+	/* reg:[0,127], use [0, 225], real:[0,255], 90% is 230(0xE6), Header Phone */
+	{0xE6, 0xE6},  		
+	{0x80, 0x80},				/* Inner Speaker */
+	{0x80, 0x80},				/* Normal Out */
+};
+
+
+static StVolume s_stVolumeGradient[TOTAL_VOLUME_CHANNEL] = 
+{
+	{0x80, 0x80},			/* AIN 1 */
+	{0x80, 0x80},     		/* AIN 2 */
+	{0x80, 0x80},     		/* AIN 3 */
+	{0x80, 0x80},     		/* AIN 4 */
+	{0x80, 0x80},     		/* AIN 5 */
+	/* reg:[0,255], use [0, 207], real:[0,255], 80% is 204(0xCC), Ain Mux */
+	{0xCC, 0xCC},					
+	/* reg:[0,255], use [0, 255], real:[0,255], 90% is 230(0xE6), Digital PC */
+	{0xE6, 0xE6}, 					
+	/* reg:[0,127], use [0, 225], real:[0,255], 90% is 230(0xE6), Header Phone */
+	{0xE6, 0xE6},  		
+	{0x80, 0x80},				/* Inner Speaker */
+	{0x80, 0x80},				/* Normal Out */
+};
+
 
 s32 WM8776Write(u8 u8Cmd, u16 u16Data)
 {
@@ -121,21 +208,124 @@ u8 WM8776GetOutputChannelEnableState()
 }
 
 
+static uint8_t s_u8ExternVolumeCmdState = 0;
 
-
-static EmAudioCtrlMode s_emAudioCtrlMode[TOTAL_MODE_CTRL] = 
+void FlushExternVolumeCmd(void)
 {
-	_Audio_Ctrl_Mode_Normal, 	/* AIN 1 */
-	_Audio_Ctrl_Mode_Normal, 	/* AIN 2 */
-	_Audio_Ctrl_Mode_Normal,	/* AIN 3 */
-	_Audio_Ctrl_Mode_Normal,	/* AIN 4 */	
-	_Audio_Ctrl_Mode_Normal,	/* AIN 5 */ 
-	_Audio_Ctrl_Mode_Normal,	/* Ain Mux */
-	_Audio_Ctrl_Mode_Normal,	/* Digital PC */
-	_Audio_Ctrl_Mode_Normal,	/* Header Phone */
-	_Audio_Ctrl_Mode_Normal,	/* Inner Speaker */
+	if (s_u8ExternVolumeCmdState != 0)
+	{
+		/* <TODO>: send cmd to SPI */
+		memset(s_stExternVolumeCmd, 0, sizeof(s_stExternVolumeCmd));
+	}
+}
 
-};
+
+int32_t ExternVolumeSetMode(uint8_t u8Index, EmAudioCtrlMode emMode)
+{
+	uint8_t u8GlobleChannel;
+	uint8_t u8DeviceIndex;
+	EmAudioCtrlMode emOldMode;
+	
+	if (u8Index >= TOTAL_EXTERN_VOLUME_CHANNEL)
+	{
+		return -1;
+	}
+	
+	if (emMode > _Audio_Ctrl_Mode_ShieldLeftAndRight)
+	{
+		return -1;
+	}
+	
+	u8GlobleChannel = c_u8ExternVolumeChanelToGlobleChannel[u8Index];
+	
+	emOldMode = s_emAudioCtrlMode[u8GlobleChannel];
+	if (emOldMode == emMode)
+	{
+		return 1;
+	}
+
+	if ((emOldMode == _Audio_Ctrl_Mode_ShieldLeft && emMode == _Audio_Ctrl_Mode_ShieldRight)
+		|| (emMode == _Audio_Ctrl_Mode_ShieldLeft && emOldMode == _Audio_Ctrl_Mode_ShieldRight))
+	{
+		return -1;
+	}
+	
+	u8DeviceIndex = c_u8ExternVolumeChanelToDevice[u8Index];
+	
+	if (emMode == _Audio_Ctrl_Mode_Normal)
+	{
+		s_stExternVolumeCmd[u8DeviceIndex].u8Cmd = EXTERN_VOLUME_CTRL_VOLUME | 
+							EXTERN_VOLUME_CTRL_CHANNEL_ALL;
+		s_stExternVolumeCmd[u8DeviceIndex].u8Data = s_stVolume[u8GlobleChannel].u8Channel1;
+	}
+	else
+	{
+		s_stExternVolumeCmd[u8DeviceIndex].u8Cmd = EXTERN_VOLUME_CTRL_MUTE | (((u32)emMode) & 0x0F);		
+	}
+	s_emAudioCtrlMode[u8GlobleChannel] = emMode;
+	s_u8ExternVolumeCmdState = 1;
+	return 0;
+	
+}
+
+int32_t ExternVolumeSetVolume(uint8_t u8Index, uint8_t u8Volume)
+{
+	uint8_t u8GlobleChannel;
+	uint8_t u8DeviceIndex;
+	EmAudioCtrlMode emCurMode;
+	uint8_t u8OldVolume;
+	
+	if (u8Index >= TOTAL_EXTERN_VOLUME_CHANNEL)
+	{
+		return -1;
+	}
+	
+
+	u8GlobleChannel = c_u8ExternVolumeChanelToGlobleChannel[u8Index];
+	
+	u8OldVolume = s_stVolume[u8GlobleChannel].u8Channel1;
+	if (u8OldVolume == u8Volume)
+	{
+		return 1;
+	}
+	
+	emCurMode = s_emAudioCtrlMode[u8GlobleChannel];
+	if (emCurMode == _Audio_Ctrl_Mode_ShieldLeftAndRight)
+	{
+		s_stVolume[u8GlobleChannel].u8Channel1 = 
+		s_stVolume[u8GlobleChannel].u8Channel2 = u8Volume;
+		return 1;
+	}
+
+	u8DeviceIndex = c_u8ExternVolumeChanelToDevice[u8Index];
+
+	s_stExternVolumeCmd[u8Index].u8Data = u8Volume;
+	if (emCurMode == _Audio_Ctrl_Mode_ShieldLeft)
+	{
+		s_stExternVolumeCmd[u8DeviceIndex].u8Cmd = EXTERN_VOLUME_CTRL_VOLUME | 
+							EXTERN_VOLUME_CTRL_CHANNEL2;
+	}
+	else if (emCurMode == _Audio_Ctrl_Mode_ShieldRight)
+	{
+		s_stExternVolumeCmd[u8DeviceIndex].u8Cmd = EXTERN_VOLUME_CTRL_VOLUME | 
+							EXTERN_VOLUME_CTRL_CHANNEL1;	
+	}
+	else
+	{
+		s_stExternVolumeCmd[u8DeviceIndex].u8Cmd = EXTERN_VOLUME_CTRL_VOLUME | 
+							EXTERN_VOLUME_CTRL_CHANNEL_ALL;	
+	}
+	
+	s_stVolume[u8GlobleChannel].u8Channel1 = 
+	s_stVolume[u8GlobleChannel].u8Channel2 = u8Volume;
+	s_u8ExternVolumeCmdState = 1;
+	
+	return 0;
+	
+}
+
+
+
 
 
 static void AudioModePinInit(void)
@@ -374,6 +564,7 @@ const PFUN_SetAudioCtrlMode c_pFunSetAudioCtrlMode[TOTAL_MODE_CTRL] =
 	SetAudioCtrlModeDigitalPC,		/* Digital PC */
 	SetAudioCtrlModeHeaderPhone,	/* Header Phone */
 	NULL,	/* Inner Speaker */
+	NULL,	/* Normal Out */
 };
 
 int SetAudioCtrlModeInner(u32 u32Channel, EmAudioCtrlMode emMode, bool boIsForce)
@@ -408,36 +599,6 @@ void AudioModeCtrlInit(void)
 
 
 
-
-static StVolume s_stVolume[TOTAL_VOLUME_CHANNEL] = 
-{
-	{0, 0},				/* AIN 1 */
-	{0, 0},     		/* AIN 2 */
-	{0, 0},     		/* AIN 3 */
-	{0, 0},     		/* AIN 4 */
-	{0, 0},     		/* AIN 5 */
-	/* reg:[0,255], use [0, 207], real:[0,255], 80% is 204(0xCC), Ain Mux */
-	{0xCC, 0xCC},					
-	/* reg:[0,255], use [0, 255], real:[0,255], 90% is 230(0xE6), Digital PC */
-	{0xE6, 0xE6}, 					
-	/* reg:[0,127], use [0, 225], real:[0,255], 90% is 230(0xE6), Header Phone */
-	{0xE6, 0xE6},  		
-	{0, 0},				/* Inner Speaker */
-};
-
-
-static StVolume s_stVolumeGradient[TOTAL_VOLUME_CHANNEL] = 
-{
-	{0, 0},				/* AIN 1 */
-	{0, 0},     		/* AIN 2 */
-	{0, 0},     		/* AIN 3 */
-	{0, 0},     		/* AIN 4 */
-	{0, 0},     		/* AIN 5 */
-	{0xCF, 0xCF},					/* reg:[0,255], use [0, 207], 80% is 165(0xA5), Ain Mux */
-	{0xE6, 0xE6}, 					/* reg:[0,255], 90% is 230(0xE6), Digital PC */
-	{0x72 << 1, 0x72 << 1},  		/* reg:[0,127], 90% is 114(0x72), Header Phone */
-	{0, 0},				/* Inner Speaker */
-};
 
 
 static void AudioVolumeGPIOInit(void)
@@ -603,6 +764,7 @@ const PFUN_SetAudioVolume c_pFunSetAudioVolume[TOTAL_MODE_CTRL] =
 	SetAudioVolumeDigitalPC,		/* Digital PC */
 	SetAudioVolumeHeaderPhone,	/* Header Phone */
 	NULL,	/* Inner Speaker */
+	NULL,	/* Normal Out */
 };
 int SetAudioVolumeInner(u32 u32Channel, StVolume stVolume, bool boIsForce)
 {
@@ -835,6 +997,11 @@ void SaveMemoryFromDevice(void *pMemory)
 void LoadPowerOffMemoryToDevice(void)
 {
 	LoadMemoryToDevice(&(g_stSave.stPowerOffMemory));
+}
+
+void LoadFactoryMemoryToDevice(void)
+{
+	LoadMemoryToDevice(&(g_stSave.stFactoryMemory));	
 }
 
 

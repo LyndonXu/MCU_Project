@@ -508,7 +508,7 @@ void ReadSaveData(void)
 	
 end:
 
-	for (i = 0; i < MAX_MEMORY_CNT + 1; i++)
+	for (i = 0; i < MAX_MEMORY_CNT + 2; i++)
 	{
 		SaveMemoryFromDevice((g_stSave.stMemory + i));
 	}

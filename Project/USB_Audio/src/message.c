@@ -174,6 +174,7 @@ StIOFIFO *MessageUartFlush(bool boSendALL)
 			{
 				/* no buffer for this message */
 				free(pMsg);
+				break;
 			}
 			pFIFO->pData = pMsg;
 			pFIFO->s32Length = u32GetMsgLength;

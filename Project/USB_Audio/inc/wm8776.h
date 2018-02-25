@@ -54,6 +54,7 @@ enum
 	_Channel_PC,
 	_Channel_HeaderPhone,
 	_Channel_InnerSpeaker,
+	_Channel_NormalOut,
 
 };
 
@@ -71,11 +72,15 @@ u8 WM8776GetOutputChannelEnableState(void);
 #endif
 
 #ifndef TOTAL_MODE_CTRL_OUT
-#define TOTAL_MODE_CTRL_OUT		2
+#define TOTAL_MODE_CTRL_OUT		3
 #endif
 
 #ifndef TOTAL_MODE_CTRL
-#define TOTAL_MODE_CTRL		9
+#define TOTAL_MODE_CTRL			10
+#endif
+
+#ifndef TOTAL_EXTERN_MODE_CTRL
+#define TOTAL_EXTERN_MODE_CTRL		7
 #endif
 
 typedef enum _tagEmAudioCtrlMode
@@ -110,6 +115,11 @@ void SetAllAudioCtrlMode(EmAudioCtrlMode emAudioCtrlMode[TOTAL_MODE_CTRL]);
 
 #ifndef TOTAL_VOLUME_CHANNEL
 #define TOTAL_VOLUME_CHANNEL 			TOTAL_MODE_CTRL
+#endif
+
+
+#ifndef TOTAL_EXTERN_VOLUME_CHANNEL
+#define TOTAL_EXTERN_VOLUME_CHANNEL 			TOTAL_EXTERN_MODE_CTRL
 #endif
 
 #define CHANNEL_ALL		0x00
@@ -151,6 +161,9 @@ void PowerPWMFlush(void);
 
 void LoadMemoryToDevice(void *pMemory);
 void SaveMemoryFromDevice(void *pMemory);
+
+
+void LoadFactoryMemoryToDevice(void);
 
 void LoadPowerOffMemoryToDevice(void);
 void PowerOffMemoryFlush(void);	/* 100ms flush */

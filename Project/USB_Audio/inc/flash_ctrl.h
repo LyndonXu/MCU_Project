@@ -142,6 +142,7 @@ typedef struct _tagStSave
 	u16 u16Head;
 	StMemory stMemory[MAX_MEMORY_CNT];
 	StMemory stPowerOffMemory;
+	StMemory stFactoryMemory;
 	u16 u16CheckDum;
 }StSave;
 

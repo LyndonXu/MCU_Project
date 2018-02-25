@@ -1105,6 +1105,13 @@ bool PCEchoProcessYNA(StIOFIFO *pFIFO)
 			{
 				u8 u8Index = pMsg[_YNA_Data2];
 				boHasEcho = false;
+				
+				if (u8Index == 0xFF)
+				{
+					LoadFactoryMemoryToDevice();
+					break;
+				}
+				
 				if (u8Index >= MAX_MEMORY_CNT)
 				{
 					break;
@@ -1173,6 +1180,7 @@ bool PCEchoProcessYNA(StIOFIFO *pFIFO)
 				if (pVolume != NULL)
 				{
 					u16 i; 
+					
 					for (i = 0; i < TOTAL_VOLUME_CHANNEL; i++)
 					{
 						StVolume stVolume;
@@ -1190,20 +1198,33 @@ bool PCEchoProcessYNA(StIOFIFO *pFIFO)
 
 			case 0x81:	
 			{
-#if 0				
-				StMixAudioVoltage *pVoltage = malloc(AUDIO_VOLTAGE_CNT * sizeof(StMixAudioVoltage));
+#if 1			
+				const u8 u8ChannelMap[AUDIO_VOLTAGE_CNT + 1] = 
+				{
+					_Channel_AIN_1,
+					_Channel_AIN_2,
+					_Channel_AIN_3,
+					_Channel_AIN_4,
+					_Channel_AIN_5,
+					_Channel_InnerSpeaker,
+					_Channel_NormalOut,
+				};				
+				StMixAudioVoltage *pVoltage = malloc((AUDIO_VOLTAGE_CNT + 1) * sizeof(StMixAudioVoltage));
 				boNeedCopy = false;
 				if (pVoltage != NULL)
 				{
 					u16 i; 
 					for (i = 0; i < AUDIO_VOLTAGE_CNT; i++)
 					{
-						pVoltage[i].u8Index = i;
-						pVoltage[i].u16Left = GetAudioVoltage(i * 2 + 0);//rand() % 4096;//
-						pVoltage[i].u16Right = GetAudioVoltage(i * 2 + 1);//rand() % 4096;//
+						pVoltage[i].u8Index = u8ChannelMap[i];
+						pVoltage[i].u16Left = GetAudioVoltage(i * 2 + 0);
+						pVoltage[i].u16Right = GetAudioVoltage(i * 2 + 1);
 					}
+					memcpy(pVoltage + i, pVoltage + i - 1, sizeof(StMixAudioVoltage));
+					pVoltage[i].u8Index = u8ChannelMap[i];
+					
 					pEcho = YNAMakeAnArrayVarialbleCmd(0x0681, pVoltage, 
-						AUDIO_VOLTAGE_CNT, sizeof(StMixAudioVoltage), &u32EchoLength);
+						AUDIO_VOLTAGE_CNT + 1, sizeof(StMixAudioVoltage), &u32EchoLength);
 					free(pVoltage);
 				}
 #endif				
