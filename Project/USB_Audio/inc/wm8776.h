@@ -141,7 +141,7 @@ void SetAllAudioVolume(StVolume stVolume[TOTAL_VOLUME_CHANNEL]);
 
 int SetAudioVolumeGradient(u32 u32Channel, StVolume stVolume);
 void AudioVolumeGradientFlush(void);
-
+void FlushExternVolumeCmd(void);
 
 
 #ifndef FANTASY_POWER_CTRL

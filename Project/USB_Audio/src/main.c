@@ -158,6 +158,7 @@ int main()
 
 		PowerOffMemoryFlush();
 		AudioVolumeGradientFlush();		
+		FlushExternVolumeCmd();
 		
 		if (SysTimeDiff(u32RedressTime, g_u32SysTickCnt) > 500)
 		{

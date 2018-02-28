@@ -22,8 +22,8 @@
 
 typedef struct _tagStExternVolumeCmd
 {
-	uint8_t u8Cmd;
 	uint8_t u8Data;
+	uint8_t u8Cmd;
 }StExternVolumeCmd;
 
 uint8_t const c_u8ExternVolumeChanelToDevice[TOTAL_EXTERN_VOLUME_CHANNEL] =
@@ -46,6 +46,24 @@ uint8_t const c_u8ExternVolumeChanelToGlobleChannel[TOTAL_EXTERN_VOLUME_CHANNEL]
 
 
 static StExternVolumeCmd s_stExternVolumeCmd[TOTAL_EXTERN_VOLUME_CHANNEL] = { 0 };
+
+
+#define MSG_SPI_SHDN_PIN 				GPIO_Pin_6
+#define MSG_SPI_SHDN_PORT	 			GPIOC
+
+#define MSG_SPI_RS_PIN 					GPIO_Pin_7
+#define MSG_SPI_RS_PORT	 				GPIOC
+
+
+#define MSG_SPI_CS_PIN 				GPIO_Pin_12
+#define MSG_SPI_SCK_PIN 			GPIO_Pin_13
+#define MSG_SPI_MISO_PIN			GPIO_Pin_14
+#define MSG_SPI_MOSI_PIN			GPIO_Pin_15
+#define MSG_SPI_PORT				GPIOB
+#define MSG_SPI						SPI2
+
+#define ENABLE_MSG_SPI()			RCC_APB1PeriphClockCmd(RCC_APB1Periph_SPI2, ENABLE);
+
 
 static uint16_t s_u16WMReg[_WM_Reg_Reserved] = 
 {
@@ -119,6 +137,11 @@ static StVolume s_stVolumeGradient[TOTAL_VOLUME_CHANNEL] =
 };
 
 
+
+static void ExternInterfaceInit(void);
+
+
+
 s32 WM8776Write(u8 u8Cmd, u16 u16Data)
 {
 	u8 u8Addr = (0x34 >> 1);
@@ -164,6 +187,9 @@ void WM8776Init(void)
 	I2CInit();
 	//WM8776Write(_WM_Reg_OutputMux, 0x07);
 	//s_u16WMReg[_WM_Reg_OutputMux] = 0x07;
+	
+	ExternInterfaceInit();
+
 }
 
 int WM8776EnableAINChannel(u8 u8Channel)
@@ -210,12 +236,43 @@ u8 WM8776GetOutputChannelEnableState()
 
 static uint8_t s_u8ExternVolumeCmdState = 0;
 
+static StExternVolumeCmd s_stExternVolumeCmdBak[TOTAL_EXTERN_VOLUME_CHANNEL] = { 0 };
+
+
 void FlushExternVolumeCmd(void)
 {
 	if (s_u8ExternVolumeCmdState != 0)
 	{
 		/* <TODO>: send cmd to SPI */
+		uint16_t *pCmd = (uint16_t *)s_stExternVolumeCmd;
+		uint16_t *pCmdBak = (uint16_t *)s_stExternVolumeCmdBak;
+		uint32_t i;
+		
+		GPIO_WriteBit(MSG_SPI_PORT, MSG_SPI_CS_PIN, Bit_RESET);
+		
+		memset(s_stExternVolumeCmdBak, 0, sizeof(s_stExternVolumeCmdBak));
+
+		while (SPI_I2S_GetFlagStatus(MSG_SPI, SPI_I2S_FLAG_TXE) == RESET);
+		for (i = 0; i < TOTAL_EXTERN_VOLUME_CHANNEL; i++)
+		{
+			/* Send SPI data */
+			SPI_I2S_SendData(MSG_SPI, pCmd[TOTAL_EXTERN_VOLUME_CHANNEL - 1 - i]);
+
+			while (SPI_I2S_GetFlagStatus(MSG_SPI, SPI_I2S_FLAG_TXE) == RESET);
+
+			/* Wait for SPI data reception */
+			while (SPI_I2S_GetFlagStatus(MSG_SPI, SPI_I2S_FLAG_RXNE) == RESET);
+			/* Read SPI received data */
+			pCmdBak[TOTAL_EXTERN_VOLUME_CHANNEL - 1 - i] = 
+				SPI_I2S_ReceiveData(MSG_SPI);
+			
+		}
+		
+		GPIO_WriteBit(MSG_SPI_PORT, MSG_SPI_CS_PIN, Bit_SET);
+		
+		
 		memset(s_stExternVolumeCmd, 0, sizeof(s_stExternVolumeCmd));
+		s_u8ExternVolumeCmdState = 0;
 	}
 }
 
@@ -260,7 +317,16 @@ int32_t ExternVolumeSetMode(uint8_t u8Index, EmAudioCtrlMode emMode)
 	}
 	else
 	{
-		s_stExternVolumeCmd[u8DeviceIndex].u8Cmd = EXTERN_VOLUME_CTRL_MUTE | (((u32)emMode) & 0x0F);		
+		EmAudioCtrlMode emCorrectMode = emMode;
+		if (emCorrectMode == _Audio_Ctrl_Mode_ShieldLeft)
+		{
+			emCorrectMode = _Audio_Ctrl_Mode_ShieldRight;
+		}
+		else if (emCorrectMode == _Audio_Ctrl_Mode_ShieldRight)
+		{
+			emCorrectMode = _Audio_Ctrl_Mode_ShieldLeft;		
+		}
+		s_stExternVolumeCmd[u8DeviceIndex].u8Cmd = EXTERN_VOLUME_CTRL_MUTE | (((u32)emCorrectMode) & 0x0F);		
 	}
 	s_emAudioCtrlMode[u8GlobleChannel] = emMode;
 	s_u8ExternVolumeCmdState = 1;
@@ -299,7 +365,7 @@ int32_t ExternVolumeSetVolume(uint8_t u8Index, uint8_t u8Volume)
 
 	u8DeviceIndex = c_u8ExternVolumeChanelToDevice[u8Index];
 
-	s_stExternVolumeCmd[u8Index].u8Data = u8Volume;
+	s_stExternVolumeCmd[u8DeviceIndex].u8Data = u8Volume;
 	if (emCurMode == _Audio_Ctrl_Mode_ShieldLeft)
 	{
 		s_stExternVolumeCmd[u8DeviceIndex].u8Cmd = EXTERN_VOLUME_CTRL_VOLUME | 
@@ -322,6 +388,63 @@ int32_t ExternVolumeSetVolume(uint8_t u8Index, uint8_t u8Volume)
 	
 	return 0;
 	
+}
+
+
+
+static void ExternInterfaceInit(void)
+{
+	SPI_InitTypeDef SPI_InitStructure;
+	GPIO_InitTypeDef GPIO_InitStructure;
+	
+	ENABLE_MSG_SPI();
+
+	SPI_StructInit(&SPI_InitStructure);
+	SPI_InitStructure.SPI_Mode = SPI_Mode_Master;
+	//SPI_InitStructure.SPI_Direction = SPI_Direction_1Line_Tx;
+	SPI_InitStructure.SPI_DataSize = SPI_DataSize_16b;
+	SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_16;
+	SPI_InitStructure.SPI_NSS = SPI_NSS_Soft;
+	SPI_Init(MSG_SPI, &SPI_InitStructure);
+
+	SPI_Cmd(MSG_SPI, ENABLE);
+	
+	GPIO_InitStructure.GPIO_Pin = MSG_SPI_SCK_PIN | MSG_SPI_MOSI_PIN;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+	GPIO_Init(MSG_SPI_PORT, &GPIO_InitStructure);
+	
+	
+	GPIO_InitStructure.GPIO_Pin = MSG_SPI_MISO_PIN;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+	GPIO_Init(MSG_SPI_PORT, &GPIO_InitStructure);
+
+
+	GPIO_InitStructure.GPIO_Pin = MSG_SPI_SHDN_PIN;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+	GPIO_Init(MSG_SPI_SHDN_PORT, &GPIO_InitStructure);
+	GPIO_WriteBit(MSG_SPI_SHDN_PORT, MSG_SPI_SHDN_PIN, Bit_SET);
+		
+
+	GPIO_InitStructure.GPIO_Pin = MSG_SPI_RS_PIN;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+	GPIO_Init(MSG_SPI_RS_PORT, &GPIO_InitStructure);
+
+	GPIO_InitStructure.GPIO_Pin = MSG_SPI_CS_PIN;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+	GPIO_Init(MSG_SPI_PORT, &GPIO_InitStructure);
+	GPIO_WriteBit(MSG_SPI_PORT, MSG_SPI_CS_PIN, Bit_SET);
+
+
+	GPIO_WriteBit(MSG_SPI_RS_PORT, MSG_SPI_RS_PIN, Bit_RESET);
+	
+	{
+		u32 u32RedressTime = g_u32SysTickCnt;
+		while(SysTimeDiff(u32RedressTime, g_u32SysTickCnt) < 100);		
+	}
+
+	GPIO_WriteBit(MSG_SPI_RS_PORT, MSG_SPI_RS_PIN, Bit_SET);
+
 }
 
 
@@ -553,18 +676,74 @@ int SetAudioCtrlModeHeaderPhone(EmAudioCtrlMode emMode, bool boIsForce)
 	return 0;
 }
 
+int SetAudioModeExtern(u8 u8Index, EmAudioCtrlMode emMode, bool boIsForce)
+{
+	u8 u8RealChannel;
+	if (u8Index >= TOTAL_EXTERN_MODE_CTRL)
+	{
+		return -1;
+	}
+	
+	u8RealChannel = c_u8ExternVolumeChanelToGlobleChannel[u8Index];
+	
+	if (boIsForce || (emMode != s_emAudioCtrlMode[u8RealChannel]))
+	{
+		ExternVolumeSetMode(u8Index, emMode);
+	}
+	
+	s_emAudioCtrlMode[u8RealChannel] = emMode;
+	
+	return 0;
+}
+
+int SetAudioModeExternAIN1(EmAudioCtrlMode emMode, bool boIsForce)
+{
+	return SetAudioModeExtern(0, emMode, boIsForce);
+}
+
+int SetAudioModeExternAIN2(EmAudioCtrlMode emMode, bool boIsForce)
+{
+	return SetAudioModeExtern(1, emMode, boIsForce);
+}
+
+int SetAudioModeExternAIN3(EmAudioCtrlMode emMode, bool boIsForce)
+{
+	return SetAudioModeExtern(2, emMode, boIsForce);
+}
+
+int SetAudioModeExternAIN4(EmAudioCtrlMode emMode, bool boIsForce)
+{
+	return SetAudioModeExtern(3, emMode, boIsForce);
+}
+
+int SetAudioModeExternAIN5(EmAudioCtrlMode emMode, bool boIsForce)
+{
+	return SetAudioModeExtern(4, emMode, boIsForce);
+}
+
+int SetAudioModeExternInnerSpeaker(EmAudioCtrlMode emMode, bool boIsForce)
+{
+	return SetAudioModeExtern(5, emMode, boIsForce);
+}
+
+int SetAudioModeExternNormalOut(EmAudioCtrlMode emMode, bool boIsForce)
+{
+	return SetAudioModeExtern(6, emMode, boIsForce);
+}
+
+
 const PFUN_SetAudioCtrlMode c_pFunSetAudioCtrlMode[TOTAL_MODE_CTRL] = 
 {
-	NULL, 	/* AIN 1 */
-	NULL, 	/* AIN 2 */
-	NULL,	/* AIN 3 */
-	NULL,	/* AIN 4 */	
-	NULL,	/* AIN 5 */ 
+	SetAudioModeExternAIN1, 	/* AIN 1 */
+	SetAudioModeExternAIN2, 	/* AIN 2 */
+	SetAudioModeExternAIN3,		/* AIN 3 */
+	SetAudioModeExternAIN4,		/* AIN 4 */	
+	SetAudioModeExternAIN5,		/* AIN 5 */ 
 	SetAudioCtrlModeAinMux,			/* Ain Mux */
 	SetAudioCtrlModeDigitalPC,		/* Digital PC */
 	SetAudioCtrlModeHeaderPhone,	/* Header Phone */
-	NULL,	/* Inner Speaker */
-	NULL,	/* Normal Out */
+	SetAudioModeExternInnerSpeaker,	/* Inner Speaker */
+	SetAudioModeExternNormalOut,	/* Normal Out */
 };
 
 int SetAudioCtrlModeInner(u32 u32Channel, EmAudioCtrlMode emMode, bool boIsForce)
@@ -618,7 +797,7 @@ int SetAudioVolumeAinMux(StVolume stVolume, bool boIsForce)
 	{
 		uint16_t u16Reg = s_u16WMReg[_WM_Reg_ADCLeftAtt];
 		
-		u8 u8Tmp = (u32)stVolume.u8Channel1 * 207 / 255;
+		u8 u8Tmp = (u32)stVolume.u8Channel1 /* * 207 / 255 */;
 		
 		u16Reg &= 0xFF00;
 		u16Reg |= u8Tmp;
@@ -634,7 +813,7 @@ int SetAudioVolumeAinMux(StVolume stVolume, bool boIsForce)
 	{
 		uint16_t u16Reg = s_u16WMReg[_WM_Reg_ADCRightAtt];
 
-		u8 u8Tmp = (u32)stVolume.u8Channel2 * 207 / 255;
+		u8 u8Tmp = (u32)stVolume.u8Channel2 /* * 207 / 255 */;
 
 		u16Reg &= 0xFF00;
 		u16Reg |= u8Tmp;
@@ -733,7 +912,7 @@ int SetAudioVolumeHeaderPhone(StVolume stVolume, bool boIsForce)
 			return -1;
 		}
 		s_u16WMReg[_WM_Reg_HPLeftAtt] = u16Reg;
-		s_stVolume[_Channel_PC].u8Channel1 = stVolume.u8Channel1;
+		s_stVolume[_Channel_HeaderPhone].u8Channel1 = stVolume.u8Channel1;
 	}
 	
 	if (boIsForce || (stVolume.u8Channel2 != s_stVolume[_Channel_HeaderPhone].u8Channel2))
@@ -753,18 +932,77 @@ int SetAudioVolumeHeaderPhone(StVolume stVolume, bool boIsForce)
 	return 0;	
 }
 
+
+int SetAudioVolumeExtern(u8 u8Index, StVolume stVolume, bool boIsForce)
+{
+	u8 u8Volume = ((u32)stVolume.u8Channel1 + stVolume.u8Channel2) / 2;
+	u8 u8RealChannel;
+	if (u8Index >= TOTAL_EXTERN_MODE_CTRL)
+	{
+		return -1;
+	}
+	
+	u8RealChannel = c_u8ExternVolumeChanelToGlobleChannel[u8Index];
+	
+	if (boIsForce || (stVolume.u8Channel2 != s_stVolume[u8RealChannel].u8Channel2))
+	{
+		ExternVolumeSetVolume(u8Index, u8Volume);
+	}
+	
+	s_stVolume[u8RealChannel].u8Channel1 = s_stVolume[u8RealChannel].u8Channel2 = u8Volume;
+	
+	return 0;
+}
+
+int SetAudioVolumeAIN1(StVolume stVolume, bool boIsForce)
+{
+	return SetAudioVolumeExtern(0, stVolume, boIsForce);
+}
+
+int SetAudioVolumeAIN2(StVolume stVolume, bool boIsForce)
+{
+	return SetAudioVolumeExtern(1, stVolume, boIsForce);
+}
+
+int SetAudioVolumeAIN3(StVolume stVolume, bool boIsForce)
+{
+	return SetAudioVolumeExtern(2, stVolume, boIsForce);
+}
+
+int SetAudioVolumeAIN4(StVolume stVolume, bool boIsForce)
+{
+	return SetAudioVolumeExtern(3, stVolume, boIsForce);
+}
+
+int SetAudioVolumeAIN5(StVolume stVolume, bool boIsForce)
+{
+	return SetAudioVolumeExtern(4, stVolume, boIsForce);
+}
+
+int SetAudioVolumeInnerSpeaker(StVolume stVolume, bool boIsForce)
+{
+	return SetAudioVolumeExtern(5, stVolume, boIsForce);
+}
+
+int SetAudioVolumeNormalOut(StVolume stVolume, bool boIsForce)
+{
+	return SetAudioVolumeExtern(6, stVolume, boIsForce);
+}
+
+
+
 const PFUN_SetAudioVolume c_pFunSetAudioVolume[TOTAL_MODE_CTRL] = 
 {
-	NULL, 	/* AIN 1 */
-	NULL, 	/* AIN 2 */
-	NULL,	/* AIN 3 */
-	NULL,	/* AIN 4 */	
-	NULL,	/* AIN 5 */ 
+	SetAudioVolumeAIN1, 	/* AIN 1 */
+	SetAudioVolumeAIN2, 	/* AIN 2 */
+	SetAudioVolumeAIN3,		/* AIN 3 */
+	SetAudioVolumeAIN4,		/* AIN 4 */	
+	SetAudioVolumeAIN5,		/* AIN 5 */ 
 	SetAudioVolumeAinMux,			/* Ain Mux */
 	SetAudioVolumeDigitalPC,		/* Digital PC */
-	SetAudioVolumeHeaderPhone,	/* Header Phone */
-	NULL,	/* Inner Speaker */
-	NULL,	/* Normal Out */
+	SetAudioVolumeHeaderPhone,		/* Header Phone */
+	SetAudioVolumeInnerSpeaker,		/* Inner Speaker */
+	SetAudioVolumeNormalOut,		/* Normal Out */
 };
 int SetAudioVolumeInner(u32 u32Channel, StVolume stVolume, bool boIsForce)
 {
