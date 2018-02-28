@@ -318,6 +318,7 @@ int32_t ExternVolumeSetMode(uint8_t u8Index, EmAudioCtrlMode emMode)
 	else
 	{
 		EmAudioCtrlMode emCorrectMode = emMode;
+#if 0		
 		if (emCorrectMode == _Audio_Ctrl_Mode_ShieldLeft)
 		{
 			emCorrectMode = _Audio_Ctrl_Mode_ShieldRight;
@@ -326,6 +327,7 @@ int32_t ExternVolumeSetMode(uint8_t u8Index, EmAudioCtrlMode emMode)
 		{
 			emCorrectMode = _Audio_Ctrl_Mode_ShieldLeft;		
 		}
+#endif		
 		s_stExternVolumeCmd[u8DeviceIndex].u8Cmd = EXTERN_VOLUME_CTRL_MUTE | (((u32)emCorrectMode) & 0x0F);		
 	}
 	s_emAudioCtrlMode[u8GlobleChannel] = emMode;
@@ -510,12 +512,12 @@ int SetAudioCtrlModeAinMux(EmAudioCtrlMode emMode, bool boIsForce)
 		}
 		case _Audio_Ctrl_Mode_ShieldLeft:
 		{	
-			u16Reg |= 0x0040;
+			u16Reg |= 0x0080;
 			break;
 		}
 		case _Audio_Ctrl_Mode_ShieldRight:
 		{
-			u16Reg |= 0x0080;
+			u16Reg |= 0x0040;
 			break;
 		}
 		case _Audio_Ctrl_Mode_ShieldLeftAndRight:
