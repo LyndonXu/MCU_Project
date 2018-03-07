@@ -70,7 +70,7 @@ static uint16_t s_u16WMReg[_WM_Reg_Reserved] =
 	0x00F9, 0x00F9, 0x00F9,			/* Header Phone, enable zero cross */
 	0x00FF, 0x00FF, 0x00FF,			/* DAC */
 	0x0000,
-	0x0099, 0x0000, 0x0000,			/* DAC£¬ DAC ctrl 1 enable zero cross and timeout disable */
+	0x0091, 0x0000, 0x0000,			/* DAC£¬ DAC ctrl 1 enable zero cross and timeout disable */
 	0x0022, 0x0022, 0x0022,			/* Interface */
 	0x0008,							/* Power */
 	0x01CF, 0x01CF,					/* ADC, enable zero cross */
@@ -1125,15 +1125,27 @@ typedef struct _tagStPowerCtrl
 
 static StPowerCtrl s_stPowerCtrl[FANTASY_POWER_CTRL] = 
 {
-	{{GPIOC, GPIO_Pin_9}, false, false},
-	{{GPIOC, GPIO_Pin_8}, false, false},
-	{{GPIOC, GPIO_Pin_7}, false, false},
-	{{GPIOC, GPIO_Pin_6}, false, false},
+	{{GPIOC, GPIO_Pin_11}, false, false},
+	{{GPIOC, GPIO_Pin_10}, false, false},
+	//{{GPIOC, GPIO_Pin_7}, false, false},
+	//{{GPIOC, GPIO_Pin_6}, false, false},
 };
 
 static void FantasyPowerPinInit(void)
 {
-	//GPIO_InitTypeDef GPIO_InitStructure;
+	int i;
+	GPIO_InitTypeDef GPIO_InitStructure;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+	
+	for (i = 0; i < FANTASY_POWER_CTRL; i++)
+	{
+		GPIO_WriteBit(s_stPowerCtrl[i].stPin.pPort, s_stPowerCtrl[i].stPin.u16Pin, Bit_RESET);
+		GPIO_InitStructure.GPIO_Pin = s_stPowerCtrl[i].stPin.u16Pin;
+		GPIO_Init(s_stPowerCtrl[i].stPin.pPort, &GPIO_InitStructure);	
+		GPIO_WriteBit(s_stPowerCtrl[i].stPin.pPort, s_stPowerCtrl[i].stPin.u16Pin, Bit_RESET);
+	}
+
 }
 
 
@@ -1152,6 +1164,12 @@ int SetFantasyPowerState(u32 u32Channel, bool boIsEnable)
 	
 	s_stPowerCtrl[u32Channel].boExpectPowerState = boIsEnable;
 	/* <TODO> open the 48V power */
+	if (boIsEnable != s_stPowerCtrl[u32Channel].boCurPowerState)
+	{
+		GPIO_WriteBit(s_stPowerCtrl[u32Channel].stPin.pPort, 
+			s_stPowerCtrl[u32Channel].stPin.u16Pin, boIsEnable ? Bit_SET : Bit_RESET);		
+		s_stPowerCtrl[u32Channel].boCurPowerState = boIsEnable;
+	}
 	
 	return 0;
 }
@@ -1211,7 +1229,7 @@ void LoadMemoryToDevice(void *pMemory)
 	}
 	SetAllAudioCtrlMode(pMem->emAudioCtrlMode);
 	SetAllAudioVolume(pMem->stVolume);
-	SetAllFantasyPowerState(pMem->boFantasyPower);
+	//SetAllFantasyPowerState(pMem->boFantasyPower);
 	WM8776EnableAINChannel(pMem->u8AINChannelEnableState);
 	WM8776EnableOutputChannel(pMem->u8OutputChannelEnableState);
 	

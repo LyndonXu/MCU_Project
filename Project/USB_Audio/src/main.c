@@ -68,7 +68,7 @@ int main()
 	AudioModeCtrlInit();
 	AudioVolumeInit();
 	AudioSrcInit();
-
+	FantasyPowerInit();
 	
 	do
 	{

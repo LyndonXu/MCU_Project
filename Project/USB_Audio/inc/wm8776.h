@@ -145,7 +145,7 @@ void FlushExternVolumeCmd(void);
 
 
 #ifndef FANTASY_POWER_CTRL
-#define FANTASY_POWER_CTRL		4
+#define FANTASY_POWER_CTRL		2
 #endif
 
 
