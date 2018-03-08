@@ -803,6 +803,17 @@ int SetAudioVolumeAinMux(StVolume stVolume, bool boIsForce)
 		
 		u16Reg &= 0xFF00;
 		u16Reg |= u8Tmp;
+		
+		if ((u8Tmp >= (0xA4 - 8)) && (u8Tmp <= (0xA4 + 8)))
+		{
+			u16Reg &= (~0x0100);
+		}
+		else
+		{
+			u16Reg |= (0x0100);
+		}
+		
+		
 		if (WM8776Write(_WM_Reg_ADCLeftAtt, u16Reg) != 0)
 		{
 			return -1;
@@ -819,6 +830,16 @@ int SetAudioVolumeAinMux(StVolume stVolume, bool boIsForce)
 
 		u16Reg &= 0xFF00;
 		u16Reg |= u8Tmp;
+		
+		if ((u8Tmp >= (0xA4 - 8)) && (u8Tmp <= (0xA4 + 8)))
+		{
+			u16Reg &= (~0x0100);
+		}
+		else
+		{
+			u16Reg |= (0x0100);
+		}
+
 		if (WM8776Write(_WM_Reg_ADCRightAtt, u16Reg) != 0)
 		{
 			return -1;
