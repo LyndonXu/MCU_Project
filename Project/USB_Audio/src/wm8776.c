@@ -109,7 +109,7 @@ static StVolume s_stVolume[TOTAL_VOLUME_CHANNEL] =
 	{0x80, 0x80},     		/* AIN 4 */
 	{0x80, 0x80},     		/* AIN 5 */
 	/* reg:[0,255], use [0, 207], real:[0,255], 80% is 204(0xCC), Ain Mux */
-	{0xCC, 0xCC},					
+	{0xCF, 0xCF},					
 	/* reg:[0,255], use [0, 255], real:[0,255], 90% is 230(0xE6), Digital PC */
 	{0xE6, 0xE6}, 					
 	/* reg:[0,127], use [0, 225], real:[0,255], 90% is 230(0xE6), Header Phone */
@@ -127,7 +127,7 @@ static StVolume s_stVolumeGradient[TOTAL_VOLUME_CHANNEL] =
 	{0x80, 0x80},     		/* AIN 4 */
 	{0x80, 0x80},     		/* AIN 5 */
 	/* reg:[0,255], use [0, 207], real:[0,255], 80% is 204(0xCC), Ain Mux */
-	{0xCC, 0xCC},					
+	{0xCF, 0xCF},					
 	/* reg:[0,255], use [0, 255], real:[0,255], 90% is 230(0xE6), Digital PC */
 	{0xE6, 0xE6}, 					
 	/* reg:[0,127], use [0, 225], real:[0,255], 90% is 230(0xE6), Header Phone */
@@ -803,7 +803,8 @@ int SetAudioVolumeAinMux(StVolume stVolume, bool boIsForce)
 		
 		u16Reg &= 0xFF00;
 		u16Reg |= u8Tmp;
-		
+
+#if 0		
 		if ((u8Tmp >= (0xA4 - 8)) && (u8Tmp <= (0xA4 + 8)))
 		{
 			u16Reg &= (~0x0100);
@@ -812,7 +813,7 @@ int SetAudioVolumeAinMux(StVolume stVolume, bool boIsForce)
 		{
 			u16Reg |= (0x0100);
 		}
-		
+#endif		
 		
 		if (WM8776Write(_WM_Reg_ADCLeftAtt, u16Reg) != 0)
 		{
@@ -831,6 +832,7 @@ int SetAudioVolumeAinMux(StVolume stVolume, bool boIsForce)
 		u16Reg &= 0xFF00;
 		u16Reg |= u8Tmp;
 		
+#if 0		
 		if ((u8Tmp >= (0xA4 - 8)) && (u8Tmp <= (0xA4 + 8)))
 		{
 			u16Reg &= (~0x0100);
@@ -839,7 +841,7 @@ int SetAudioVolumeAinMux(StVolume stVolume, bool boIsForce)
 		{
 			u16Reg |= (0x0100);
 		}
-
+#endif
 		if (WM8776Write(_WM_Reg_ADCRightAtt, u16Reg) != 0)
 		{
 			return -1;
