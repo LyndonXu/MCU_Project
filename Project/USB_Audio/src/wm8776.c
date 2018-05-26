@@ -11,6 +11,7 @@
 
 #include "I2C.h"
 #include "wm8776.h"
+#include "message.h"
 #include "protocol.h"
 #include "flash_ctrl.h"
 
@@ -161,7 +162,7 @@ s32 WM8776Write(u8 u8Cmd, u16 u16Data)
 		u8EchoBase[_YNA_Data3] = u8Data;
 
 		YNAGetCheckSum(u8EchoBase);
-		CopyToUartMessage(u8EchoBase, 8);
+		CopyToUartMessage(&c_stUartIOTCB, u8EchoBase, 8);
 	}
 #endif	
 	//return 0;
@@ -1234,7 +1235,7 @@ void FantasyPowerInit(void)
 	u32 i;
 
 	FantasyPowerPinInit();
-	
+	FantasyPowerStateChangeInit();
 	
 	for (i = 0; i < FANTASY_POWER_CTRL; i++)
 	{
@@ -1326,5 +1327,223 @@ void PowerOffMemoryFlush(void)	/* 100ms flush */
 
 }
 
+
+typedef struct _tagStFantasyPowerStateChange
+{
+	bool boIsChanging;
+	bool boExpectState;
+	uint8_t u8CurState;	/* 0 备份通道状态并静音, 1 改变幻象电源, 2 恢复通道状态 */
+	uint8_t u8Channel[2];	/*  */
+	
+	uint8_t u8DigitalChannelBackup;
+	uint32_t u32CtrlTime;
+}StFantasyPowerStateChange;
+
+static StFantasyPowerStateChange s_stFPSC[FANTASY_POWER_CTRL] = {0};
+static uint8_t s_u8FPSCState = 0xFF;
+static uint8_t s_u8DigitalInBackup = false;
+
+void FantasyPowerStateChangeInit(void)
+{
+	s_stFPSC[0].u8Channel[0] = _Channel_AIN_1;
+	s_stFPSC[0].u8Channel[1] = _Channel_AIN_2;
+	
+	s_stFPSC[1].u8Channel[0] = _Channel_AIN_3;
+	s_stFPSC[1].u8Channel[1] = _Channel_AIN_4;
+}
+
+void FantasyPowerStateChange(uint32_t  u32Channel, bool boIsEnable)
+{
+	if (u32Channel < FANTASY_POWER_CTRL)
+	{
+		s_stFPSC[u32Channel].u8CurState = 0;
+		s_stFPSC[u32Channel].boExpectState = boIsEnable;
+		s_stFPSC[u32Channel].boIsChanging = true;
+	}
+}
+void FantasyPowerStateChangeFlush(void)
+{
+	int32_t i;
+	bool boIsChanging = false;
+	for (i = 0; i < FANTASY_POWER_CTRL; i++)
+	{
+		if (s_stFPSC[i].boIsChanging)
+		{
+			boIsChanging = true;
+			switch(s_stFPSC[i].u8CurState)
+			{
+				case 0:
+				{
+					int32_t j = 0;
+					uint8_t u8State = s_stFPSC[i].u8DigitalChannelBackup = 
+							WM8776GetAINChannelEnableState();
+					if (s_u8FPSCState == 0xFF)
+					{
+						s_u8DigitalInBackup = u8State;
+						s_u8FPSCState = 0;
+					}
+					for (j = 0; j < 2; j++)
+					{
+						u8State &= (~(1 << s_stFPSC[i].u8Channel[j]));
+					}
+					
+					WM8776EnableAINChannel(u8State);
+					s_stFPSC[i].u32CtrlTime = g_u32SysTickCnt;
+					s_stFPSC[i].u8CurState = 1;
+					break;
+				}
+				case 1:
+				{
+					if (SysTimeDiff(s_stFPSC[i].u32CtrlTime, g_u32SysTickCnt) < 40)
+					{
+						break;
+					}
+					
+					SetFantasyPowerState(i, s_stFPSC[i].boExpectState);
+
+					s_stFPSC[i].u32CtrlTime = g_u32SysTickCnt;
+					s_stFPSC[i].u8CurState = 2;
+					break;
+				}
+				case 2:
+				{
+					if (SysTimeDiff(s_stFPSC[i].u32CtrlTime, g_u32SysTickCnt) < 5000)
+					{
+						break;
+					}
+					
+					s_stFPSC[i].boIsChanging = false;
+					break;
+				}
+				default:
+					break;
+			}
+		}
+	}
+	
+	if (!boIsChanging)
+	{
+		if (s_u8FPSCState != 0xFF)
+		{
+			
+			WM8776EnableAINChannel(s_u8DigitalInBackup);
+			s_u8FPSCState = 0xFF;
+		}
+	}
+}
+
+
+#if 0
+typedef struct _tagStFantasyPowerStateChange
+{
+	bool boIsChanging;
+	bool boExpectState;
+	uint8_t u8CurState;	/* 0 备份通道状态并静音, 1 改变幻象电源, 2 恢复通道状态 */
+	uint8_t u8Channel[2];	/*  */
+	
+	uint8_t u8DigitalChannelBakup;
+	StVolume stChannelVolume[2];	/* 一个幻象电源两个通道 */
+	EmAudioCtrlMode emChannelMode[2];
+	uint32_t u32CtrlTime;
+}StFantasyPowerStateChange;
+
+
+static StFantasyPowerStateChange s_stFPSC[FANTASY_POWER_CTRL] = {0};
+
+void FantasyPowerStateChangeInit(void)
+{
+	s_stFPSC[0].u8Channel[0] = _Channel_AIN_1;
+	s_stFPSC[0].u8Channel[1] = _Channel_AIN_2;
+	
+	s_stFPSC[1].u8Channel[0] = _Channel_AIN_3;
+	s_stFPSC[1].u8Channel[1] = _Channel_AIN_4;
+}
+
+void FantasyPowerStateChange(uint32_t  u32Channel, bool boIsEnable)
+{
+	if (u32Channel < FANTASY_POWER_CTRL)
+	{
+		s_stFPSC[u32Channel].u8CurState = 0;
+		s_stFPSC[u32Channel].boExpectState = boIsEnable;
+		s_stFPSC[u32Channel].boIsChanging = true;
+	}
+}
+
+
+void FantasyPowerStateChangeFlush(void)
+{
+	int32_t i;
+	for (i = 0; i < FANTASY_POWER_CTRL; i++)
+	{
+		if (s_stFPSC[i].boIsChanging)
+		{
+			switch(s_stFPSC[i].u8CurState)
+			{
+				case 0:
+				{
+					int32_t j = 0;
+					uint8_t u8State = s_stFPSC[i].u8DigitalChannelBakup = 
+							WM8776GetAINChannelEnableState();
+					for (j = 0; j < 2; j++)
+					{
+//						GetAudioVolume(s_stFPSC[i].u8Channel[j], 
+//								s_stFPSC[i].stChannelVolume + j);
+//						GetAudioCtrlMode(s_stFPSC[i].u8Channel[j], 
+//								s_stFPSC[i].emChannelMode + j);
+//						
+//						SetAudioCtrlMode(s_stFPSC[i].u8Channel[j], 
+//							_Audio_Ctrl_Mode_ShieldLeftAndRight);
+						
+						u8State &= (~(1 << s_stFPSC[i].u8Channel[j]));
+
+					}
+					
+					//WM8776EnableAINChannel(u8State);
+					
+					s_stFPSC[i].u32CtrlTime = g_u32SysTickCnt;
+					s_stFPSC[i].u8CurState = 1;
+					break;
+				}
+				case 1:
+				{
+					if (SysTimeDiff(s_stFPSC[i].u32CtrlTime, g_u32SysTickCnt) < 40)
+					{
+						break;
+					}
+					
+					SetFantasyPowerState(i, s_stFPSC[i].boExpectState);
+
+					s_stFPSC[i].u32CtrlTime = g_u32SysTickCnt;
+					s_stFPSC[i].u8CurState = 2;
+					break;
+				}
+				case 2:
+				{
+					int32_t j = 0;
+					if (SysTimeDiff(s_stFPSC[i].u32CtrlTime, g_u32SysTickCnt) < 3000)
+					{
+						break;
+					}
+					
+					for (j = 0; j < 2; j++)
+					{
+//						SetAudioCtrlMode(s_stFPSC[i].u8Channel[j], 
+//								s_stFPSC[i].emChannelMode[j]);
+//						SetAudioVolume(s_stFPSC[i].u8Channel[j], 
+//								s_stFPSC[i].stChannelVolume[j]);
+					}
+					
+					//WM8776EnableAINChannel(s_stFPSC[i].u8DigitalChannelBakup);
+					
+					s_stFPSC[i].boIsChanging = false;
+					break;
+				}
+				default:
+					break;
+			}
+		}
+	}
+}
+#endif
 
 

@@ -44,6 +44,7 @@ int main()
 
 	ReadSaveData();
 	MessageUartInit();
+	MessageUart2Init();
 
 #if 0	
 	KeyLedInit();
@@ -107,7 +108,7 @@ int main()
 		pBuf[_YNA_Cmd] = 0xC0;
 
 		YNAGetCheckSum(pBuf);
-		CopyToUartMessage(pBuf, PROTOCOL_YNA_DECODE_LENGTH);
+		CopyToUartMessage(&c_stUartIOTCB, pBuf, PROTOCOL_YNA_DECODE_LENGTH);
 		
 		pMsgIn = MessageUartFlush(false);
 		if (pMsgIn != NULL)
@@ -138,6 +139,7 @@ int main()
 	while (1)
 	{
 		void *pMsgIn = MessageUartFlush(false);
+		void *pMsg2In = MessageUart2Flush(false);
 		void *pKeyIn = KeyBufGetBuf();
 
 		if (pKeyIn != NULL)
@@ -148,16 +150,25 @@ int main()
 		{
 			if (BaseCmdProcess(pMsgIn, &c_stUartIOTCB) != 0)			
 			{
-				PCEchoProcess(pMsgIn);
+				PCEchoProcess(pMsgIn, &c_stUartIOTCB);
 			}
 		}
 		
+		if (pMsg2In != NULL)
+		{
+			if (BaseCmdProcess(pMsg2In, &c_stUart2IOTCB) != 0)			
+			{
+				PCEchoProcess(pMsg2In, &c_stUart2IOTCB);
+			}
+		}
 		
 		KeyBufGetEnd(pKeyIn);				
 		MessageUartRelease(pMsgIn);
+		MessageUart2Release(pMsg2In);
 
 		PowerOffMemoryFlush();
 		AudioVolumeGradientFlush();		
+		FantasyPowerStateChangeFlush();
 		FlushExternVolumeCmd();
 		
 		if (SysTimeDiff(u32RedressTime, g_u32SysTickCnt) > 500)

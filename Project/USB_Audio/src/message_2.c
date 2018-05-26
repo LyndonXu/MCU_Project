@@ -42,15 +42,15 @@
 
 
 #ifndef MAX_IO_FIFO_CNT
-#define MAX_IO_FIFO_CNT 			8
+#define MAX_IO_FIFO_CNT 16
 #endif
 
 #ifndef LEVEL_ONE_CACHE_CNT
-#define LEVEL_ONE_CACHE_CNT 		32
+#define LEVEL_ONE_CACHE_CNT 64
 #endif
 
 #ifndef CYCLE_BUF_LENGTH
-#define CYCLE_BUF_LENGTH			(32 * 2)
+#define CYCLE_BUF_LENGTH		(512 * 2)
 #endif
 
 static StIOFIFOList s_stIOFIFOList[MAX_IO_FIFO_CNT];
@@ -63,19 +63,6 @@ static char s_c8CycleBuf[CYCLE_BUF_LENGTH];
 static StCycleBuf s_stCycleBuf;
 
 
-static void UARTCtrlPinInit(void)
-{
-	GPIO_InitTypeDef GPIO_InitStructure;
-	
-	GPIO_InitStructure.GPIO_Pin = MSG_WR_CTRL_PIN;
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-	GPIO_Init(MSG_WR_CTRL_PORT, &GPIO_InitStructure);
-	
-	//WR_CTRL_READ();
-	WR_CTRL_WRITE();
-}
-
 static void UARTInit(void)
 {
 
@@ -86,7 +73,7 @@ static void UARTInit(void)
 	ENABLE_MSG_UART();
 
 	USART_StructInit(&USART_InitStructure);
-	USART_InitStructure.USART_BaudRate = 9600;//g_u32Bandrate;
+	USART_InitStructure.USART_BaudRate = 115200;
 	USART_Init(MSG_UART, &USART_InitStructure);
 	USART_Cmd(MSG_UART, ENABLE);
 	
@@ -147,15 +134,13 @@ void MSG_UART_IRQ(void)
 void MessageUart2Init(void)
 {
 	/* for uart send and get a protocol message */
-	IOFIFOInit(&s_stIOFIFOCtrl, s_stIOFIFOList, MAX_IO_FIFO_CNT, _IO_Reserved);
+	IOFIFOInit(&s_stIOFIFOCtrl, s_stIOFIFOList, MAX_IO_FIFO_CNT, _IO_UART2);
 	
 	/* level one cache for protocol */
 	LOCInit(&s_stLevelOneCache, s_c8LevelOneCache, LEVEL_ONE_CACHE_CNT * 2);
 	
 	/* for protocol analyse */
 	CycleMsgInit(&s_stCycleBuf, s_c8CycleBuf, CYCLE_BUF_LENGTH);
-	
-	UARTCtrlPinInit();
 	
 	UARTInit();
 }
@@ -179,8 +164,10 @@ StIOFIFO *MessageUart2Flush(bool boSendALL)
 		{
 			void *pMsg = NULL;
 			uint32_t u32GetMsgLength = 0;
+			int32_t s32Protocol = 0;
 			StIOFIFOList *pFIFO = NULL;
-			pMsg = CycleGetOneMsg(&s_stCycleBuf, pData, u32Length, &u32GetMsgLength, NULL, NULL);
+			pMsg = CycleGetOneMsg(&s_stCycleBuf, pData, u32Length, &u32GetMsgLength, 
+					&s32Protocol, NULL);
 			if (pMsg == NULL)
 			{
 				break;
@@ -191,10 +178,12 @@ StIOFIFO *MessageUart2Flush(bool boSendALL)
 			{
 				/* no buffer for this message */
 				free(pMsg);
+				break;
 			}
 			pFIFO->pData = pMsg;
 			pFIFO->s32Length = u32GetMsgLength;
 			pFIFO->boNeedFree = true;
+			pFIFO->u8ProtocolType = s32Protocol;
 			InsertIntoTheRWFIFO(&s_stIOFIFOCtrl, pFIFO, true);
 
 			u32Length = 0;
@@ -320,18 +309,6 @@ void MessageUart2Release(StIOFIFO *pFIFO)
 	}
 }
 
-void MessageUart2ReleaseNoReleaseData(StIOFIFO *pFIFO)
-{
-	if (pFIFO != NULL)
-	{
-		ReleaseAUsedFIFO(&s_stIOFIFOCtrl, (StIOFIFOList *)pFIFO);
-	}
-}
-int32_t GetMessageUart2BufLength(void)
-{
-	return CYCLE_BUF_LENGTH;
-}
-
 
 int32_t MessageUart2Write(void *pData, bool boNeedFree, uint16_t u16ID, uint32_t u32Length)
 {
@@ -352,6 +329,18 @@ int32_t MessageUart2Write(void *pData, bool boNeedFree, uint16_t u16ID, uint32_t
 	InsertIntoTheRWFIFO(&s_stIOFIFOCtrl, pFIFO, false);
 	
 	return 0;
+}
+
+void MessageUart2ReleaseNoReleaseData(StIOFIFO *pFIFO)
+{
+	if (pFIFO != NULL)
+	{
+		ReleaseAUsedFIFO(&s_stIOFIFOCtrl, (StIOFIFOList *)pFIFO);
+	}
+}
+int32_t GetMessageUart2BufLength(void)
+{
+	return CYCLE_BUF_LENGTH;
 }
 
 /*

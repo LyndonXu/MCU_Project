@@ -157,6 +157,9 @@ void SetAllFantasyPowerState(bool boState[FANTASY_POWER_CTRL]);
 void PowerPWMFlush(void);
 
 
+void FantasyPowerStateChangeInit(void);
+void FantasyPowerStateChange(uint32_t  u32Channel, bool boIsEnable);
+void FantasyPowerStateChangeFlush(void);
 
 
 void LoadMemoryToDevice(void *pMemory);

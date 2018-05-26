@@ -647,10 +647,20 @@ void CopyToUart3Message(void *pData, u32 u32Length)
 {
 }
 
-void CopyToUartMessage(void *pData, u32 u32Length)
+void CopyToUartMessage(const StIOTCB *pIOTCB, void *pData, u32 u32Length)
 {
-	CopyToUart1Message(pData, u32Length);
-	CopyToUart3Message(pData, u32Length);
+	if ((pIOTCB != NULL) && (pData != NULL) && (u32Length != 0))
+	{
+		void *pBuf = malloc(u32Length);
+		if (pBuf != NULL)
+		{
+			memcpy(pBuf, pData, u32Length);
+			if (pIOTCB->pFunMsgWrite(pBuf, true, _IO_Reserved, u32Length) != 0)
+			{
+				free (pBuf);
+			}	
+		}
+	}
 }
 
 
@@ -978,7 +988,7 @@ static bool KeyBoardProcess(StKeyMixIn *pKeyIn)
 
 		
 		YNAGetCheckSum(pBuf);
-		CopyToUartMessage(pBuf, PROTOCOL_YNA_DECODE_LENGTH);	
+		CopyToUartMessage(NULL, pBuf, PROTOCOL_YNA_DECODE_LENGTH);	
 	}
 	return true;
 }
@@ -996,7 +1006,7 @@ static bool CodeSwitchProcess(StKeyMixIn *pKeyIn)
 
 	memset(pBuf, 0, PROTOCOL_YNA_ENCODE_LENGTH);
 	YNAGetCheckSum(pBuf);
-	CopyToUartMessage(pBuf, PROTOCOL_YNA_DECODE_LENGTH);
+	CopyToUartMessage(NULL, pBuf, PROTOCOL_YNA_DECODE_LENGTH);
 	return true;
 	
 }
@@ -1023,7 +1033,7 @@ bool KeyProcess(StIOFIFO *pFIFO)
 	return false;
 }
 
-bool PCEchoProcessYNA(StIOFIFO *pFIFO)
+bool PCEchoProcessYNA(StIOFIFO *pFIFO, const StIOTCB *pIOTCB)
 {
 	uint8_t *pMsg;
 	if (pFIFO == NULL)
@@ -1145,7 +1155,7 @@ bool PCEchoProcessYNA(StIOFIFO *pFIFO)
 				{
 					u8 u8Array = pMsg[_YNA_Data1] >> 4;
 					bool boIsEnable = pMsg[_YNA_Data2] == 0x00 ? true : false;
-					SetFantasyPowerState(u8Array, boIsEnable);
+					FantasyPowerStateChange(u8Array, boIsEnable);
 				}
 				break;
 			}
@@ -1238,11 +1248,19 @@ bool PCEchoProcessYNA(StIOFIFO *pFIFO)
 		if (boNeedCopy)
 		{
 			YNAGetCheckSum(u8EchoBase);
-			CopyToUartMessage(u8EchoBase, PROTOCOL_YNA_DECODE_LENGTH);
+			CopyToUartMessage(pIOTCB, u8EchoBase, PROTOCOL_YNA_DECODE_LENGTH);
 		}
 		if (boHasEcho && pEcho != NULL)
 		{
-			if(MessageUartWrite(pEcho, true, _IO_Reserved, u32EchoLength) != 0)
+			if (pIOTCB == NULL)
+			{
+				free(pEcho);
+			}
+			else if (pIOTCB->pFunMsgWrite == NULL)
+			{
+				free(pEcho);			
+			}
+			else if(pIOTCB->pFunMsgWrite(pEcho, true, _IO_Reserved, u32EchoLength) != 0)
 			{
 				free(pEcho);
 			}
@@ -1299,7 +1317,7 @@ bool PCEchoProcessYNA(StIOFIFO *pFIFO)
 					u16 i;
 					for (i = 0; i < u16Count; i++)
 					{
-						SetFantasyPowerState(pMode[i].u8Index, pMode[i].u8Enable);
+						FantasyPowerStateChange(pMode[i].u8Index, pMode[i].u8Enable);
 					}
 					break;
 				}
@@ -1326,7 +1344,15 @@ bool PCEchoProcessYNA(StIOFIFO *pFIFO)
 			}
 			if (boHasEcho && pEcho != NULL)
 			{
-				if (MessageUartWrite(pEcho, true, _IO_Reserved, u32EchoLength) != 0)
+				if (pIOTCB == NULL)
+				{
+					free(pEcho);
+				}
+				else if (pIOTCB->pFunMsgWrite == NULL)
+				{
+					free(pEcho);			
+				}
+				else if (pIOTCB->pFunMsgWrite(pEcho, true, _IO_Reserved, u32EchoLength) != 0)
 				{
 					free(pEcho);
 				}
@@ -1340,11 +1366,11 @@ bool PCEchoProcessYNA(StIOFIFO *pFIFO)
 	return true;
 }
 
-bool PCEchoProcess(StIOFIFO *pFIFO)
+bool PCEchoProcess(StIOFIFO *pFIFO, const StIOTCB *pIOTCB)
 {
 	if (pFIFO->u8ProtocolType == _Protocol_YNA)
 	{
-		return PCEchoProcessYNA(pFIFO);
+		return PCEchoProcessYNA(pFIFO, pIOTCB);
 	}
 	
 	return false;

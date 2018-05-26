@@ -12,3 +12,4 @@
 *.dep
 RTE_Components.h
 *.iex
+*.scvd
