@@ -27,11 +27,17 @@ typedef struct _tagStExternVolumeCmd
 	uint8_t u8Cmd;
 }StExternVolumeCmd;
 
-uint8_t const c_u8ExternVolumeChanelToDevice[TOTAL_EXTERN_VOLUME_CHANNEL] =
+uint8_t const c_u8ExternVolumeChannelToDevice[TOTAL_EXTERN_VOLUME_CHANNEL] =
 {
 	/* _Channel_AIN_1 ~ 5, _Channel_InnerSpeaker, _Channel_NormalOut */
 	5, 4, 3, 2, 0, 1, 6
 };
+uint8_t const c_u8ExternVolumeDeviceToChannel[TOTAL_EXTERN_VOLUME_CHANNEL] =
+{
+	/* _Channel_AIN_1 ~ 5, _Channel_InnerSpeaker, _Channel_NormalOut */
+	4, 5, 3, 2, 1, 0, 6
+};
+
 
 uint8_t const c_u8ExternVolumeChanelToGlobleChannel[TOTAL_EXTERN_VOLUME_CHANNEL] =
 {
@@ -244,33 +250,99 @@ void FlushExternVolumeCmd(void)
 {
 	if (s_u8ExternVolumeCmdState != 0)
 	{
-		/* <TODO>: send cmd to SPI */
-		uint16_t *pCmd = (uint16_t *)s_stExternVolumeCmd;
-		uint16_t *pCmdBak = (uint16_t *)s_stExternVolumeCmdBak;
-		uint32_t i;
-		
-		GPIO_WriteBit(MSG_SPI_PORT, MSG_SPI_CS_PIN, Bit_RESET);
-		
-		memset(s_stExternVolumeCmdBak, 0, sizeof(s_stExternVolumeCmdBak));
-
-		while (SPI_I2S_GetFlagStatus(MSG_SPI, SPI_I2S_FLAG_TXE) == RESET);
-		for (i = 0; i < TOTAL_EXTERN_VOLUME_CHANNEL; i++)
+		uint32_t j;
+		for (j = 0; j < 2; j++)
 		{
-			/* Send SPI data */
-			SPI_I2S_SendData(MSG_SPI, pCmd[TOTAL_EXTERN_VOLUME_CHANNEL - 1 - i]);
+			/* <TODO>: send cmd to SPI */
+			uint16_t *pCmd = (uint16_t *)s_stExternVolumeCmd;
+			//uint16_t *pCmdBak = (uint16_t *)s_stExternVolumeCmdBak;
+			uint32_t i;
 
-			while (SPI_I2S_GetFlagStatus(MSG_SPI, SPI_I2S_FLAG_TXE) == RESET);
-
-			/* Wait for SPI data reception */
-			while (SPI_I2S_GetFlagStatus(MSG_SPI, SPI_I2S_FLAG_RXNE) == RESET);
-			/* Read SPI received data */
-			pCmdBak[TOTAL_EXTERN_VOLUME_CHANNEL - 1 - i] = 
-				SPI_I2S_ReceiveData(MSG_SPI);
+			GPIO_WriteBit(MSG_SPI_PORT, MSG_SPI_CS_PIN, Bit_RESET);
 			
+			while (SPI_I2S_GetFlagStatus(MSG_SPI, SPI_I2S_FLAG_TXE) == RESET);
+			for (i = 0; i < TOTAL_EXTERN_VOLUME_CHANNEL; i++)
+			{
+				/* Send SPI data */
+				SPI_I2S_SendData(MSG_SPI, pCmd[TOTAL_EXTERN_VOLUME_CHANNEL - 1 - i]);
+
+				while (SPI_I2S_GetFlagStatus(MSG_SPI, SPI_I2S_FLAG_TXE) == RESET);
+	#if 0
+				/* Wait for SPI data reception */
+				while (SPI_I2S_GetFlagStatus(MSG_SPI, SPI_I2S_FLAG_RXNE) == RESET);
+				/* Read SPI received data */
+				pCmdBak[TOTAL_EXTERN_VOLUME_CHANNEL - 1 - i] = 
+					SPI_I2S_ReceiveData(MSG_SPI);
+	#endif			
+			}
+			
+			GPIO_WriteBit(MSG_SPI_PORT, MSG_SPI_CS_PIN, Bit_SET);
+
+			if (j == 0)
+			{
+				bool boChannelNeedSendVolume = false;
+
+				for (i = 0; i < TOTAL_EXTERN_VOLUME_CHANNEL; i++)
+				{
+					StExternVolumeCmd stCmd = {0};
+					bool boOneChannelNeedSendVolume = false;
+
+					stCmd.u8Cmd = s_stExternVolumeCmd[i].u8Cmd;
+					stCmd.u8Data = s_stExternVolumeCmd[i].u8Data;
+
+					if (((s_stExternVolumeCmd[i].u8Cmd & EXTERN_VOLUME_CTRL_MUTE) != 0) && 
+						((s_stExternVolumeCmdBak[i].u8Cmd & EXTERN_VOLUME_CTRL_MUTE) != 0))
+					{
+						/* mute all to mute on channel, or mute one channel to anther channel */
+						if (((s_stExternVolumeCmd[i].u8Cmd & EXTERN_VOLUME_CTRL_CHANNEL_ALL) != 
+							EXTERN_VOLUME_CTRL_CHANNEL_ALL) && 
+							((s_stExternVolumeCmd[i].u8Cmd & EXTERN_VOLUME_CTRL_CHANNEL_ALL) != 
+							(s_stExternVolumeCmdBak[i].u8Cmd & EXTERN_VOLUME_CTRL_CHANNEL_ALL)))
+						{
+							uint8_t u8MemChannel = c_u8ExternVolumeDeviceToChannel[i];
+							StVolume stVolume;
+							boOneChannelNeedSendVolume = true;
+							
+							
+							u8MemChannel = c_u8ExternVolumeChanelToGlobleChannel[u8MemChannel];
+							GetAudioVolume(u8MemChannel, &stVolume);
+															
+							/* LEFT */
+							if ((s_stExternVolumeCmd[i].u8Cmd & EXTERN_VOLUME_CTRL_CHANNEL1) != 0)
+							{
+								s_stExternVolumeCmd[i].u8Cmd = EXTERN_VOLUME_CTRL_VOLUME | EXTERN_VOLUME_CTRL_CHANNEL2;
+								s_stExternVolumeCmd[i].u8Data = stVolume.u8Channel2; /* <TODO> get this channel right volume */				
+							}
+							else
+							{
+								s_stExternVolumeCmd[i].u8Cmd = EXTERN_VOLUME_CTRL_VOLUME | EXTERN_VOLUME_CTRL_CHANNEL1;
+								s_stExternVolumeCmd[i].u8Data = stVolume.u8Channel1; /* <TODO> get this channel left volume */											
+							}
+						}
+					}
+					
+					s_stExternVolumeCmdBak[i].u8Cmd = stCmd.u8Cmd;
+					s_stExternVolumeCmdBak[i].u8Data = stCmd.u8Data;
+					
+					if (boOneChannelNeedSendVolume)
+					{
+						boChannelNeedSendVolume = true;
+					}
+					else
+					{
+						s_stExternVolumeCmd[i].u8Cmd = 0;
+						s_stExternVolumeCmd[i].u8Data = 0;
+					}
+				}
+			
+				if (!boChannelNeedSendVolume)
+				{
+					break;	/* break j */
+				}
+				
+			}
+		
 		}
-		
-		GPIO_WriteBit(MSG_SPI_PORT, MSG_SPI_CS_PIN, Bit_SET);
-		
 		
 		memset(s_stExternVolumeCmd, 0, sizeof(s_stExternVolumeCmd));
 		s_u8ExternVolumeCmdState = 0;
@@ -308,7 +380,7 @@ int32_t ExternVolumeSetMode(uint8_t u8Index, EmAudioCtrlMode emMode)
 		return -1;
 	}
 	
-	u8DeviceIndex = c_u8ExternVolumeChanelToDevice[u8Index];
+	u8DeviceIndex = c_u8ExternVolumeChannelToDevice[u8Index];
 	
 	if (emMode == _Audio_Ctrl_Mode_Normal)
 	{
@@ -366,7 +438,7 @@ int32_t ExternVolumeSetVolume(uint8_t u8Index, uint8_t u8Volume)
 		return 1;
 	}
 
-	u8DeviceIndex = c_u8ExternVolumeChanelToDevice[u8Index];
+	u8DeviceIndex = c_u8ExternVolumeChannelToDevice[u8Index];
 
 	s_stExternVolumeCmd[u8DeviceIndex].u8Data = u8Volume;
 	if (emCurMode == _Audio_Ctrl_Mode_ShieldLeft)
