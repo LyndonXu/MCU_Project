@@ -267,13 +267,15 @@ void FlushExternVolumeCmd(void)
 				SPI_I2S_SendData(MSG_SPI, pCmd[TOTAL_EXTERN_VOLUME_CHANNEL - 1 - i]);
 
 				while (SPI_I2S_GetFlagStatus(MSG_SPI, SPI_I2S_FLAG_TXE) == RESET);
-	#if 0
 				/* Wait for SPI data reception */
 				while (SPI_I2S_GetFlagStatus(MSG_SPI, SPI_I2S_FLAG_RXNE) == RESET);
+				
 				/* Read SPI received data */
+				SPI_I2S_ReceiveData(MSG_SPI);
+#if 0
 				pCmdBak[TOTAL_EXTERN_VOLUME_CHANNEL - 1 - i] = 
 					SPI_I2S_ReceiveData(MSG_SPI);
-	#endif			
+#endif			
 			}
 			
 			GPIO_WriteBit(MSG_SPI_PORT, MSG_SPI_CS_PIN, Bit_SET);
