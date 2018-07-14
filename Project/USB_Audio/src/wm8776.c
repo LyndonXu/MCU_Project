@@ -77,7 +77,7 @@ static uint16_t s_u16WMReg[_WM_Reg_Reserved] =
 	0x00F9, 0x00F9, 0x00F9,			/* Header Phone, enable zero cross */
 	0x00FF, 0x00FF, 0x00FF,			/* DAC */
 	0x0000,
-	0x0091, 0x0000, 0x0000,			/* DAC£¬ DAC ctrl 1 enable zero cross and timeout disable */
+	0x0091, 0x0000, 0x0000,			/* DAC£¬ DAC ctrl 1 enable zero cross and timeout enable */
 	0x0022, 0x0022, 0x0022,			/* Interface */
 	0x0008,							/* Power */
 	0x01CF, 0x01CF,					/* ADC, enable zero cross */
