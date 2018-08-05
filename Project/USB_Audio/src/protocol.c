@@ -42,7 +42,7 @@
 #include "wm8776.h"
 
 
-#define APP_VERSOIN	"YA_USB_AUDIO_180714"
+#define APP_VERSOIN	"YA_USB_AUDIO_180805"
 
 u8 g_u8CamAddr = 0;
 
@@ -1328,7 +1328,7 @@ bool PCEchoProcessYNA(StIOFIFO *pFIFO, const StIOTCB *pIOTCB)
 					for (i = 0; i < u16Count; i++)
 					{
 						StVolume stVolume;
-#if 0						
+#if 1						
 						if (pVolume[i].u8Index == _Channel_AIN_Mux)
 						{
 							continue;
