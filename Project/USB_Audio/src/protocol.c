@@ -48,6 +48,8 @@ u8 g_u8CamAddr = 0;
 
 EmProtocol g_emProtocol = _Protocol_YNA;
 
+bool g_boIsAINMUXCanCtrl = false;
+
 
 int32_t CycleMsgInit(StCycleBuf *pCycleBuf, void *pBuf, uint32_t u32Length)
 {
@@ -1240,6 +1242,16 @@ bool PCEchoProcessYNA(StIOFIFO *pFIFO, const StIOTCB *pIOTCB)
 #endif				
 				break;
 			}
+			case 0xC1:
+			{
+				if (pMsg[_YNA_Data1] == (0x10 + _Channel_AIN_Mux))
+				{
+					g_boIsAINMUXCanCtrl = !pMsg[_YNA_Data3];
+				}
+				boHasEcho = false;
+				boNeedCopy = false;
+				break;
+			}
 			default:
 				boHasEcho = false;
 				boNeedCopy = false;
@@ -1328,11 +1340,14 @@ bool PCEchoProcessYNA(StIOFIFO *pFIFO, const StIOTCB *pIOTCB)
 					for (i = 0; i < u16Count; i++)
 					{
 						StVolume stVolume;
-#if 1						
-						if (pVolume[i].u8Index == _Channel_AIN_Mux)
+#if 1					
+						if (!g_boIsAINMUXCanCtrl)
 						{
-							continue;
-						}
+							if (pVolume[i].u8Index == _Channel_AIN_Mux)
+							{
+								continue;
+							}
+						}	
 #endif
 						stVolume.u8Channel1 = pVolume[i].u8Left;
 						stVolume.u8Channel2 = pVolume[i].u8Right;

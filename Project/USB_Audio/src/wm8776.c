@@ -14,6 +14,7 @@
 #include "message.h"
 #include "protocol.h"
 #include "flash_ctrl.h"
+#include "SN74HC595D.h"
 
 #define EXTERN_VOLUME_CTRL_VOLUME			0x10
 #define EXTERN_VOLUME_CTRL_MUTE				0x20
@@ -1264,9 +1265,20 @@ int SetFantasyPowerState(u32 u32Channel, bool boIsEnable)
 	/* <TODO> open the 48V power */
 	if (boIsEnable != s_stPowerCtrl[u32Channel].boCurPowerState)
 	{
+		BitAction emAction = boIsEnable ? Bit_SET : Bit_RESET;
 		GPIO_WriteBit(s_stPowerCtrl[u32Channel].stPin.pPort, 
-			s_stPowerCtrl[u32Channel].stPin.u16Pin, boIsEnable ? Bit_SET : Bit_RESET);		
+			s_stPowerCtrl[u32Channel].stPin.u16Pin, emAction);		
 		s_stPowerCtrl[u32Channel].boCurPowerState = boIsEnable;
+		if (u32Channel == 0)
+		{
+			SN74HC595DIOCtrl(7 - 1, emAction);
+			SN74HC595DIOCtrl(8 - 1, emAction);
+		}
+		else
+		{
+			SN74HC595DIOCtrl(5 - 1, emAction);
+			SN74HC595DIOCtrl(6 - 1, emAction);
+		}
 	}
 	
 	return 0;

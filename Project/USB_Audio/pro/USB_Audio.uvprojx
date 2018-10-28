@@ -754,6 +754,16 @@
               <FileType>1</FileType>
               <FilePath>..\src\message_2.c</FilePath>
             </File>
+            <File>
+              <FileName>SN74HC595D.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\src\SN74HC595D.c</FilePath>
+            </File>
+            <File>
+              <FileName>SN74HC595D.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\inc\SN74HC595D.h</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

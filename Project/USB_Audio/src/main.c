@@ -25,6 +25,7 @@
 #include "message_2.h"
 #include "flash_ctrl.h"
 #include "extern_io_ctrl.h"
+#include "SN74HC595D.h"
 
 #include "wm8776.h"
 
@@ -45,6 +46,9 @@ int main()
 	ReadSaveData();
 	MessageUartInit();
 	MessageUart2Init();
+	
+	SN74HC595DIOInit();
+	SN74HC595DIOClear();
 
 #if 0	
 	KeyLedInit();
@@ -171,6 +175,8 @@ int main()
 		FantasyPowerStateChangeFlush();
 		FlushExternVolumeCmd();
 		
+		SN74HC595DIOFlush();
+		
 		if (SysTimeDiff(u32RedressTime, g_u32SysTickCnt) > 500)
 		{
 			static bool boToggle = false;
@@ -180,7 +186,16 @@ int main()
 
 			GPIO_WriteBit(GPIOA, GPIO_Pin_1, boToggle ? Bit_RESET : Bit_SET);
 			boToggle = !boToggle;
-
+#if 0			
+			{
+				static u8 u8Index = 0;
+				SN74HC595DIOMemClear();
+				SN74HC595DIOCtrl(u8Index, Bit_SET);
+				
+				u8Index++;
+				u8Index &= 0x07;
+			}
+#endif
 		}
 	}
 }
