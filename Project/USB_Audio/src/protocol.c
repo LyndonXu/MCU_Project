@@ -42,7 +42,7 @@
 #include "wm8776.h"
 
 
-#define APP_VERSOIN	"YA_USB_AUDIO_180805"
+#define APP_VERSOIN	"YA_USB_AUDIO_181111"
 
 u8 g_u8CamAddr = 0;
 
@@ -1257,7 +1257,7 @@ bool PCEchoProcessYNA(StIOFIFO *pFIFO, const StIOTCB *pIOTCB)
 				boNeedCopy = false;
 				break;
 		}
-		if (boNeedCopy)
+		if (boHasEcho && boNeedCopy)
 		{
 			YNAGetCheckSum(u8EchoBase);
 			CopyToUartMessage(pIOTCB, u8EchoBase, PROTOCOL_YNA_DECODE_LENGTH);
