@@ -1339,7 +1339,7 @@ void LoadMemoryToDevice(void *pMemory)
 	}
 	SetAllAudioCtrlMode(pMem->emAudioCtrlMode);
 	SetAllAudioVolume(pMem->stVolume);
-	//SetAllFantasyPowerState(pMem->boFantasyPower);
+	SetAllFantasyPowerState(pMem->boFantasyPower);
 	WM8776EnableAINChannel(pMem->u8AINChannelEnableState);
 	WM8776EnableOutputChannel(pMem->u8OutputChannelEnableState);
 	
