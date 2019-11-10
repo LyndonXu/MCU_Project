@@ -42,7 +42,7 @@
 #include "wm8776.h"
 
 
-#define APP_VERSOIN	"YA_USB_AUDIO_181119"
+#define APP_VERSOIN	"YA_USB_AUDIO_191110"
 
 u8 g_u8CamAddr = 0;
 
@@ -1163,7 +1163,7 @@ bool PCEchoProcessYNA(StIOFIFO *pFIFO, const StIOTCB *pIOTCB)
 			}
 			case 0x50:
 			{
-				if (pMsg[_YNA_Data1] == 0x00)
+				if (pMsg[_YNA_Data1] == 0x00 || pMsg[_YNA_Data1] == 0x81)
 				{
 					WM8776EnableAINChannel(pMsg[_YNA_Data2]);
 					WM8776EnableOutputChannel(pMsg[_YNA_Data3]);
